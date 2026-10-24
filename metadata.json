@@ -1,0 +1,6 @@
+{
+  "name": "YouTube Shorts Playlist Curator",
+  "description": "Automated, unattended YouTube Shorts playlist manager and ranker with OAuth 2.0 refresh, performance scoring, smart diffing, and quota optimization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
