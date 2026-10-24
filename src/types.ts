@@ -159,4 +159,5 @@ export interface ViralScriptData {
   punchline_variations: string[];
   current_punchline_idx: number;
   hashtags: string[];
+  powered_by?: 'gemini' | 'builtin';
 }

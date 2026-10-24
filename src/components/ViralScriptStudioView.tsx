@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Sparkles, Clapperboard, Copy, Check, Music, Video, 
   ArrowRight, RefreshCw, Film, Shuffle, Clock,
-  MessageCircle, Eye, Flame, Smile, Laugh
+  MessageCircle, Eye, Flame, Key, ExternalLink, X, AlertCircle
 } from 'lucide-react';
 import { ViralScriptData } from '../types';
 
@@ -22,6 +22,17 @@ export function ViralScriptStudioView({
   const [scriptData, setScriptData] = useState<ViralScriptData | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Gemini AI Integration States
+  const [useGemini, setUseGemini] = useState<boolean>(() => {
+    return localStorage.getItem('use_gemini_engine') === 'true';
+  });
+  const [hasGeminiKey, setHasGeminiKey] = useState<boolean>(false);
+  const [maskedKey, setMaskedKey] = useState<string>('');
+  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+  const [savingKey, setSavingKey] = useState<boolean>(false);
 
   const archetypes = [
     {
@@ -78,14 +89,29 @@ export function ViralScriptStudioView({
     ]
   };
 
+  const checkGeminiStatus = async () => {
+    try {
+      const res = await fetch('/api/gemini-status');
+      if (res.ok) {
+        const data = await res.json();
+        setHasGeminiKey(Boolean(data.has_key));
+        setMaskedKey(data.masked_key || '');
+      }
+    } catch (e) {
+      console.error('Error checking gemini status:', e);
+    }
+  };
+
   const fetchScript = async (
     customTopic: string,
     arch = archetype,
     dur = durationMode,
-    pIdx = punchlineIdx
+    pIdx = punchlineIdx,
+    geminiActive = useGemini
   ) => {
     try {
       setLoading(true);
+      setErrorMessage(null);
       const res = await fetch('/api/generate-script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,23 +119,68 @@ export function ViralScriptStudioView({
           topic: customTopic,
           archetype: arch,
           duration: dur,
-          punchline_idx: pIdx
+          punchline_idx: pIdx,
+          use_gemini: geminiActive
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setScriptData(data.script || null);
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.requires_key) {
+          setShowKeyModal(true);
+        }
+        setErrorMessage(data.error || 'Failed to generate script.');
+        return;
       }
-    } catch (err) {
+
+      setScriptData(data.script || null);
+    } catch (err: any) {
       console.error('Error generating script:', err);
+      setErrorMessage(err.message || 'Network error occurred while generating script.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchScript(topic, archetype, durationMode, punchlineIdx);
+    checkGeminiStatus();
+    fetchScript(topic, archetype, durationMode, punchlineIdx, useGemini);
   }, []);
+
+  const handleToggleGemini = (enable: boolean) => {
+    if (enable && !hasGeminiKey) {
+      setShowKeyModal(true);
+      return;
+    }
+    setUseGemini(enable);
+    localStorage.setItem('use_gemini_engine', String(enable));
+    fetchScript(topic, archetype, durationMode, punchlineIdx, enable);
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    try {
+      setSavingKey(true);
+      const res = await fetch('/api/save-gemini-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKeyInput.trim() }),
+      });
+      if (res.ok) {
+        setHasGeminiKey(true);
+        setUseGemini(true);
+        localStorage.setItem('use_gemini_engine', 'true');
+        setShowKeyModal(false);
+        setApiKeyInput('');
+        await checkGeminiStatus();
+        fetchScript(topic, archetype, durationMode, punchlineIdx, true);
+      }
+    } catch (e) {
+      console.error('Error saving Gemini key:', e);
+    } finally {
+      setSavingKey(false);
+    }
+  };
 
   const handleArchetypeChange = (newArch: string) => {
     setArchetype(newArch);
@@ -117,18 +188,18 @@ export function ViralScriptStudioView({
     const firstPreset = newPresets[0] || topic;
     setTopic(firstPreset);
     setPunchlineIdx(0);
-    fetchScript(firstPreset, newArch, durationMode, 0);
+    fetchScript(firstPreset, newArch, durationMode, 0, useGemini);
   };
 
   const handleDurationChange = (newDur: string) => {
     setDurationMode(newDur);
-    fetchScript(topic, archetype, newDur, punchlineIdx);
+    fetchScript(topic, archetype, newDur, punchlineIdx, useGemini);
   };
 
   const handleShufflePunchline = () => {
     const nextIdx = punchlineIdx + 1;
     setPunchlineIdx(nextIdx);
-    fetchScript(topic, archetype, durationMode, nextIdx);
+    fetchScript(topic, archetype, durationMode, nextIdx, useGemini);
   };
 
   const handleCopyScript = () => {
@@ -137,6 +208,7 @@ export function ViralScriptStudioView({
 TITLE: ${scriptData.title}
 ARCHETYPE: ${scriptData.archetype_name}
 DURATION: ${scriptData.duration}
+ENGINE: ${scriptData.powered_by === 'gemini' ? 'Google Gemini AI (100% Unique)' : 'Built-in Smart Engine'}
 AUDIO: ${scriptData.audio_suggestion}
 ON-SCREEN TEXT HOOK: ${scriptData.onscreen_hook_text}
 RETENTION LOOP TECHNIQUE: ${scriptData.loop_ending_technique}
@@ -171,14 +243,80 @@ ${scriptData.hashtags.join(' ')}
             <span>Viral Script & Storyboard Studio</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            Algorithm-optimized Short scripts with authentic conversational Hindi dialogue, facial cues, viral loops, and zero cringe outros.
+            Generate viral comedy Short scripts tailored for Hindi creators. Use the offline Built-in Engine or toggle Google Gemini AI for 100% unique, unscripted dialogues every time.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-xl">
-          <Flame className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span className="text-xs text-emerald-300 font-medium">Sweet spot: 10–14s for 130%+ retention loops</span>
+
+        {/* Engine Mode Toggle Selector */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+          <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
+            <button
+              onClick={() => handleToggleGemini(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                !useGemini
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <span>⚡ Built-in Engine</span>
+            </button>
+
+            <button
+              onClick={() => handleToggleGemini(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                useGemini
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-purple-300'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+              <span>✨ Google Gemini AI</span>
+            </button>
+          </div>
+
+          {hasGeminiKey ? (
+            <button
+              onClick={() => setShowKeyModal(true)}
+              className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Click to manage Gemini API Key"
+            >
+              <Key className="w-3 h-3" />
+              <span>Key: {maskedKey || 'Saved'}</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowKeyModal(true)}
+              className="text-[11px] text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg hover:bg-purple-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Key className="w-3 h-3" />
+              <span>Set Free AI Key</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Error Alert Banner */}
+      {errorMessage && (
+        <div className="p-4 rounded-xl bg-red-950/40 border border-red-500/40 flex items-start justify-between gap-3 text-xs text-red-200">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold">{errorMessage}</span>
+              {useGemini && (
+                <div className="mt-1 text-slate-300">
+                  Tip: You can switch back to the <b>Built-in Engine</b> above or update your API key.
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => handleToggleGemini(false)}
+            className="px-2.5 py-1 text-[11px] font-semibold bg-red-900/60 hover:bg-red-900 text-white rounded-lg transition-colors cursor-pointer shrink-0"
+          >
+            Use Built-in Engine
+          </button>
+        </div>
+      )}
 
       {/* Step 1: Select Format Archetype */}
       <div className="space-y-3">
@@ -194,7 +332,9 @@ ${scriptData.hashtags.join(' ')}
                 onClick={() => handleArchetypeChange(arch.id)}
                 className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   isSelected
-                    ? 'bg-red-600/15 border-red-500 shadow-md shadow-red-500/10'
+                    ? useGemini
+                      ? 'bg-purple-950/20 border-purple-500 shadow-md shadow-purple-500/10'
+                      : 'bg-red-600/15 border-red-500 shadow-md shadow-red-500/10'
                     : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
                 }`}
               >
@@ -208,7 +348,7 @@ ${scriptData.hashtags.join(' ')}
                   </div>
                 </div>
                 {isSelected && (
-                  <div className="mt-3 flex items-center gap-1 text-[10px] font-bold text-red-400 uppercase tracking-wider">
+                  <div className={`mt-3 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${useGemini ? 'text-purple-400' : 'text-red-400'}`}>
                     <span>Active Format</span>
                     <Check className="w-3 h-3" />
                   </div>
@@ -238,7 +378,9 @@ ${scriptData.hashtags.join(' ')}
                 onClick={() => handleDurationChange(dur.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   durationMode === dur.id
-                    ? 'bg-red-600 text-white font-semibold shadow-sm'
+                    ? useGemini
+                      ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                      : 'bg-red-600 text-white font-semibold shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
                 title={dur.sub}
@@ -261,11 +403,13 @@ ${scriptData.hashtags.join(' ')}
                 onClick={() => {
                   setTopic(p);
                   setPunchlineIdx(0);
-                  fetchScript(p, archetype, durationMode, 0);
+                  fetchScript(p, archetype, durationMode, 0, useGemini);
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                   topic === p
-                    ? 'bg-red-600 text-white font-semibold shadow-sm'
+                    ? useGemini
+                      ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                      : 'bg-red-600 text-white font-semibold shadow-sm'
                     : 'bg-slate-950 text-slate-300 hover:text-white border border-slate-800'
                 }`}
               >
@@ -281,17 +425,37 @@ ${scriptData.hashtags.join(' ')}
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchScript(topic, archetype, durationMode, punchlineIdx)}
-            placeholder="Or type any specific situational idea (e.g. Chai lover, Sunday subah ka jhagda)..."
+            onKeyDown={(e) => e.key === 'Enter' && fetchScript(topic, archetype, durationMode, punchlineIdx, useGemini)}
+            placeholder={
+              useGemini
+                ? 'Type any unique situation (Gemini will write a 100% brand-new script)...'
+                : 'Or type any specific situational idea (e.g. Chai lover, Sunday subah ka jhagda)...'
+            }
             className="flex-1 px-4 py-2.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-red-500"
           />
           <button
-            onClick={() => fetchScript(topic, archetype, durationMode, punchlineIdx)}
+            onClick={() => fetchScript(topic, archetype, durationMode, punchlineIdx, useGemini)}
             disabled={loading}
-            className="px-5 py-2.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-500 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-50"
+            className={`px-5 py-2.5 text-xs font-semibold text-white rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-50 ${
+              useGemini
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md shadow-purple-500/20'
+                : 'bg-red-600 hover:bg-red-500'
+            }`}
           >
-            {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            <span>{loading ? 'Generating...' : 'Generate Script'}</span>
+            {loading ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {loading
+                ? useGemini
+                  ? 'Generating with Gemini AI...'
+                  : 'Generating Script...'
+                : useGemini
+                ? 'Generate with Gemini AI ✨'
+                : 'Generate Script'}
+            </span>
           </button>
         </div>
       </div>
@@ -308,9 +472,16 @@ ${scriptData.hashtags.join(' ')}
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 font-semibold">
                     {scriptData.duration}
                   </span>
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20">
-                    {scriptData.archetype_name}
-                  </span>
+                  {scriptData.powered_by === 'gemini' ? (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono text-purple-300 bg-purple-500/10 border border-purple-500/20 font-semibold flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-400" />
+                      <span>Google Gemini AI</span>
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono text-slate-300 bg-slate-800 border border-slate-700">
+                      ⚡ Built-in Engine
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-300">
@@ -378,7 +549,7 @@ ${scriptData.hashtags.join(' ')}
               <div className="p-4 rounded-xl bg-red-950/20 border border-red-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <Laugh className="w-4 h-4 text-red-400" />
+                    <Flame className="w-4 h-4 text-red-400" />
                     <span className="text-xs font-bold text-red-300 uppercase tracking-wider">
                       Selected Punchline Joke (Variation {(scriptData.current_punchline_idx % scriptData.punchline_variations.length) + 1} of {scriptData.punchline_variations.length}):
                     </span>
@@ -486,6 +657,80 @@ ${scriptData.hashtags.join(' ')}
                   {h}
                 </span>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gemini API Key Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <Sparkles className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Google Gemini AI Engine</h3>
+                  <p className="text-xs text-slate-400">Unlimited unique scripts using free AI</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowKeyModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p>
+                Google AI Studio provides a <b>completely free API key</b> with 15 requests/minute and zero credit card requirements.
+              </p>
+
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-purple-400 hover:text-purple-300 font-semibold underline"
+              >
+                <span>Get your free Gemini API key on Google AI Studio</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <div className="pt-2 space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">
+                  Paste Gemini API Key:
+                </label>
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={hasGeminiKey ? `Current Key: ${maskedKey}` : 'AIzaSy...'}
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-950 border border-slate-800 rounded-xl text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-purple-500 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  setShowKeyModal(false);
+                  setUseGemini(false);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Use Built-in Engine
+              </button>
+              <button
+                onClick={handleSaveApiKey}
+                disabled={savingKey || !apiKeyInput.trim()}
+                className="px-5 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 rounded-xl transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {savingKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>Save Key & Enable AI</span>
+              </button>
             </div>
           </div>
         </div>

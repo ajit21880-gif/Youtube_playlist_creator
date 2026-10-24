@@ -707,19 +707,137 @@ def get_trending_niche():
     ]
     return jsonify({"success": True, "niche": "Hindi Comedy & Family Sketches", "trends": niche_trends})
 
+def generate_script_with_gemini(api_key: str, topic: str, archetype_info: dict, duration_mode: str, punchline_idx: int = 0):
+    """
+    Calls Google Gemini API using REST endpoint to generate a 100% original, unique viral Short script.
+    """
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt = f"""You are an elite, viral YouTube Shorts scriptwriter for Hindi comedy channels (in the style of top Indian relatable creators).
+Generate a completely NEW, hilarious, authentic 10-20 second Short script tailored for:
+Topic: "{topic}"
+Format Archetype: "{archetype_info.get('name')}" - {archetype_info.get('description')}
+Target Duration: "{duration_mode}"
+
+Viral Guidelines:
+1. DIALOGUE: Spoken in natural, everyday conversational Hindi / Hinglish. Use witty desi expressions, teasing, or sarcasm. NEVER sound formal or like translated English.
+2. PACING: Immediate pattern-interrupt in the first 2 seconds. No hello, no intro.
+3. ON-SCREEN TEXT: Include punchy text to overlay on screen in seconds 0-3 that stops silent scrollers.
+4. NO OUTRO: Never include 'Subscribe' or 'Like' in the spoken dialogue—keep it looping.
+5. PUNCHLINE OPTIONS: Provide 3 distinctly different, hilarious punchline jokes in "punchline_variations".
+6. COMMENT TRIGGER: Formulate a polarizing question for the pinned comment that viewers can't resist answering.
+
+Return ONLY valid JSON matching this exact structure:
+{{
+  "title": "Short title with emojis and #shorts",
+  "hook": "On-screen hook text to stop scrolling (0-3s)",
+  "duration": "{duration_mode} (AI Generated)",
+  "duration_mode": "{duration_mode}",
+  "audio_suggestion": "Specific trending Hindi song or comedy sound effect cue",
+  "onscreen_hook_text": "Bold text overlay for seconds 0-3",
+  "loop_ending_technique": "How the video ends to loop seamlessly back to start",
+  "comment_spark": "Polarizing question to pin in comments",
+  "scenes": [
+    {{
+      "time": "0:00 - 0:04",
+      "label": "Hook: ...",
+      "onscreen_text": "On-screen text sticker",
+      "dialogue": "Spoken Hindi dialogue",
+      "action": "Physical acting, facial expressions, comedic body language",
+      "camera": "Camera framing, angles, zoom movements"
+    }}
+  ],
+  "punchline_variations": [
+    "Hilarious punchline option 1",
+    "Hilarious punchline option 2",
+    "Hilarious punchline option 3"
+  ],
+  "current_punchline_idx": {punchline_idx},
+  "hashtags": ["#shorts", "#funny", "#comedy", "#shortsfeed", "#viralshorts", "#youtubeshorts"]
+}}
+"""
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.95
+        }
+    }
+
+    headers = {"Content-Type": "application/json"}
+    
+    # Try gemini-2.5-flash first, fallback to gemini-1.5-flash if needed
+    resp = requests.post(url, json=payload, headers=headers, timeout=25)
+    if resp.status_code == 404:
+        url_fallback = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        resp = requests.post(url_fallback, json=payload, headers=headers, timeout=25)
+    
+    if not resp.ok:
+        err_msg = resp.text
+        try:
+            err_json = resp.json()
+            err_msg = err_json.get("error", {}).get("message", resp.text)
+        except Exception:
+            pass
+        raise RuntimeError(f"Gemini API error ({resp.status_code}): {err_msg}")
+
+    result_json = resp.json()
+    candidates = result_json.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("No response returned by Gemini model.")
+
+    raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+    script_data = json.loads(raw_text)
+    return script_data
+
+
+@app.route("/api/gemini-status", methods=["GET"])
+def get_gemini_status():
+    """Checks whether a Google Gemini API key is configured."""
+    state = curator.StateManager(STATE_FILE)
+    saved_key = state.data.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
+    masked = f"{saved_key[:4]}...{saved_key[-4:]}" if len(saved_key) > 8 else ""
+    return jsonify({
+        "success": True,
+        "has_key": bool(saved_key),
+        "masked_key": masked
+    })
+
+
+@app.route("/api/save-gemini-key", methods=["POST"])
+def save_gemini_key():
+    """Saves or removes Google Gemini API key in local state."""
+    data = request.get_json() or {}
+    key = data.get("api_key", "").strip()
+    state = curator.StateManager(STATE_FILE)
+    if key:
+        state.data["gemini_api_key"] = key
+    elif "gemini_api_key" in state.data:
+        del state.data["gemini_api_key"]
+    state.save()
+    return jsonify({"success": True, "has_key": bool(key)})
+
+
 @app.route("/api/generate-script", methods=["POST"])
 def generate_script():
     """
     Generates a viral Short production script tailored for Hindi comedy/family channels.
-    Supports 4 archetypes (family banter, trending sound, kids reaction, expectation vs reality),
-    customizable durations (10s, 15s, 22s), punchline variations, on-screen text hooks,
-    and seamless retention loops.
+    Supports Google Gemini AI generation for infinite brand-new scripts,
+    as well as the built-in smart engine.
     """
     data = request.get_json() or {}
     topic = data.get("topic", "Chai time funny moment").strip()
     archetype = data.get("archetype", "family_banter")
     duration_mode = data.get("duration", "15s")
     punchline_idx = int(data.get("punchline_idx", 0))
+    use_gemini = bool(data.get("use_gemini", False))
 
     # Catalog of archetypes with authentic Hinglish comedy scripts & dynamic generators
     archetypes_info = {
@@ -747,6 +865,40 @@ def generate_script():
 
     if archetype not in archetypes_info:
         archetype = "family_banter"
+
+    # --- Live Google Gemini AI Generation ---
+    if use_gemini:
+        state = curator.StateManager(STATE_FILE)
+        api_key = data.get("gemini_api_key") or state.data.get("gemini_api_key") or os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return jsonify({
+                "success": False,
+                "requires_key": True,
+                "error": "Google Gemini API key is required. Please enter your free API key from Google AI Studio (aistudio.google.com)."
+            }), 400
+        try:
+            gemini_script = generate_script_with_gemini(
+                api_key=api_key,
+                topic=topic,
+                archetype_info=archetypes_info[archetype],
+                duration_mode=duration_mode,
+                punchline_idx=punchline_idx
+            )
+            gemini_script["powered_by"] = "gemini"
+            gemini_script["archetype"] = archetype
+            gemini_script["archetype_name"] = archetypes_info[archetype]["name"]
+            return jsonify({
+                "success": True,
+                "script": gemini_script,
+                "archetypes": archetypes_info,
+                "powered_by": "gemini"
+            })
+        except Exception as e:
+            logger.error(f"Error calling Gemini API: {e}")
+            return jsonify({
+                "success": False,
+                "error": f"Gemini AI generation failed: {str(e)}. You can check your API key or use the Built-in Engine."
+            }), 500
 
     clean_topic_tag = "".join(c for c in topic.title() if c.isalnum())
 
