@@ -709,92 +709,317 @@ def get_trending_niche():
 
 @app.route("/api/generate-script", methods=["POST"])
 def generate_script():
-    """Generates a complete 20-30s viral Short production script with storyboard cues."""
+    """
+    Generates a viral Short production script tailored for Hindi comedy/family channels.
+    Supports 4 archetypes (family banter, trending sound, kids reaction, expectation vs reality),
+    customizable durations (10s, 15s, 22s), punchline variations, on-screen text hooks,
+    and seamless retention loops.
+    """
     data = request.get_json() or {}
-    topic = data.get("topic", "Chai time funny moment")
+    topic = data.get("topic", "Chai time funny moment").strip()
+    archetype = data.get("archetype", "family_banter")
+    duration_mode = data.get("duration", "15s")
+    punchline_idx = int(data.get("punchline_idx", 0))
 
-    scripts_db = {
-        "chai": {
-            "title": "Chai Ke Liye Kuch Bhi! ☕😂 #shorts",
-            "hook": "Ek cup chai ke liye insaan kya kuch nahi kar sakta! ☕😳",
-            "duration": "24 seconds",
-            "audio_suggestion": "Bollywood playful shehnai / cartoon comedy bounce sound effect",
-            "scenes": [
-                {
-                    "time": "0:00 - 0:03",
-                    "label": "Scene 1: Visual Pattern Interrupt",
-                    "action": "Close-up on face looking extremely tired/dramatic like in a critical hospital scene. Dramatic lighting.",
-                    "dialogue": "Doctor saheb... kya main bach paungi?",
-                    "camera": "Dramatic slow zoom in on face"
-                },
-                {
-                    "time": "0:03 - 0:10",
-                    "label": "Scene 2: The Setup & Escalation",
-                    "action": "Camera pulls back to reveal person is just sitting on kitchen stool holding an empty cup with sad puppy eyes.",
-                    "dialogue": "Jab tak subah ki adrak wali kadak chai nahi milti, tab tak meri aatma jaagti hi nahi!",
-                    "camera": "Wide angle cut with fast pan"
-                },
-                {
-                    "time": "0:10 - 0:18",
-                    "label": "Scene 3: The Climax Punchline",
-                    "action": "Someone hands over the steaming cup of chai. Instant 180° transformation: huge smile, energetic dance move, eyes glowing.",
-                    "dialogue": "Arrey waah! Ab aayi na jaan! Ab bolo kisko kya kaam batana hai?! 😂",
-                    "camera": "Medium shot with energetic jump cut"
-                },
-                {
-                    "time": "0:18 - 0:24",
-                    "label": "Scene 4: Seamless Loop & CTA",
-                    "action": "Looks at camera: 'Aapki chai mein kitna adrak hona chahiye? Comments mein batao!' and sips with sound matching opening frame.",
-                    "dialogue": "Aur aisi chai ke deewane hain toh like aur subscribe karke jao! 🧡",
-                    "camera": "Direct to camera eye-level framing"
-                }
-            ],
-            "hashtags": ["#chai", "#chailover", "#funnyvideo", "#comedyshorts", "#shortsfeed", "#youtubeshorts", "#viral"]
+    # Catalog of archetypes with authentic Hinglish comedy scripts & dynamic generators
+    archetypes_info = {
+        "family_banter": {
+            "name": "Pati-Patni & Family Banter",
+            "icon": "🎭",
+            "description": "Rapid sarcastic dialogue & relatable everyday conflict between couples, siblings, or in-laws."
+        },
+        "trending_sound": {
+            "name": "Trending Audio & Lip-Sync Guide",
+            "icon": "🎵",
+            "description": "Timestamped facial expression & physical comedy cues synced to viral beats like Jhinga la la."
+        },
+        "kids_reaction": {
+            "name": "Kids & Cute Reaction Challenge",
+            "icon": "👶",
+            "description": "Spontaneous funny interactions and innocence-turned-savage punchlines (like Naksh dance)."
+        },
+        "expectation_vs_reality": {
+            "name": "Expectation vs Reality / Desi Jugaad",
+            "icon": "🤯",
+            "description": "High-confidence start followed by an instant, hilarious reality check or failed desi hack."
         }
     }
 
-    selected = scripts_db.get("chai")
-    if topic != "chai" and topic:
-        # Dynamic generated script for any custom topic
-        selected = {
-            "title": f"Jab {topic} Hota Hai! 😂 #shorts",
-            "hook": f"Aapke saath bhi {topic} ke time aisa hota hai na? 😳🤣",
-            "duration": "22 seconds",
-            "audio_suggestion": "Trending comedy reel sound / dramatic dholak beat",
-            "scenes": [
+    if archetype not in archetypes_info:
+        archetype = "family_banter"
+
+    clean_topic_tag = "".join(c for c in topic.title() if c.isalnum())
+
+    if archetype == "family_banter":
+        titles = [
+            f"Jab Ghar Mein {topic} Par Jung Chhid Gayi! 😂 #shorts",
+            f"Yeh Desi Gharon Ki Roz Ki Kahani Hai! 😭🤣 #shorts",
+            f"Pati Ka Dimag Ya Patni Ka Order?! 💀 #shorts"
+        ]
+        hook_text = f"Ghar pe {topic} bolkar aisi aafat aayi... 😭"
+        audio = "Bollywood comedic dholak beat / playful shehnai / dramatic vine boom"
+        
+        punchline_options = [
+            "Maine toh bas pucha tha... inhone 5 saal puraana hisaab nikaal diya! 💀",
+            "Ab batao, iska jawab haan du toh pitun, na du toh bhookha rahu! 😂",
+            "Itna gussa toh CBI wale bhi inquiry me nahi dikhate jitna yahan mila! 🤣"
+        ]
+        active_punchline = punchline_options[punchline_idx % len(punchline_options)]
+
+        if duration_mode == "10s":
+            scenes = [
+                {
+                    "time": "0:00 - 0:04",
+                    "label": "Hook: The Innocent Question (0-4s)",
+                    "action": "Camera close-up on face with innocent, polite smile asking a simple household question.",
+                    "dialogue": f"Suno na... bas itna bata do ki {topic} kab tak hoga?",
+                    "camera": "0.5x wide angle close-up with quick snap zoom",
+                    "onscreen_text": "Galti se pucch liya... 💀"
+                },
+                {
+                    "time": "0:04 - 0:10",
+                    "label": "Twist & Climax: The Explosive Comeback (4-10s)",
+                    "action": "Sudden sharp pan to second person giving a death stare or hilarious dramatic monologue.",
+                    "dialogue": active_punchline,
+                    "camera": "Over-the-shoulder dramatic tilt",
+                    "onscreen_text": "Pura hisaab barabar! 😂"
+                }
+            ]
+            duration_str = "10 seconds (Ultra-Viral Loop)"
+        elif duration_mode == "22s":
+            scenes = [
+                {
+                    "time": "0:00 - 0:04",
+                    "label": "Hook: Dramatic Setup (0-4s)",
+                    "action": "Walking into room with extreme confidence, addressing family/spouse.",
+                    "dialogue": f"Aaj maine decide kiya hai, {topic} main apne style se handle karunga!",
+                    "camera": "Low-angle hero shot moving forward",
+                    "onscreen_text": "Confidence check: 100% 😂"
+                },
+                {
+                    "time": "0:04 - 0:10",
+                    "label": "Escalation: The Reality Check (4-10s)",
+                    "action": "Second character doesn't even look up, just utters one savage sarcastic line with a ladle or tea cup in hand.",
+                    "dialogue": "Pehle subah ka geela tauliya bed se uthaya? Ya uske liye bhi shubh muhurat nikalwana padega?",
+                    "camera": "Mid two-person kitchen/hall frame",
+                    "onscreen_text": "Confidence down to 0% 😭"
+                },
+                {
+                    "time": "0:10 - 0:17",
+                    "label": "Climax: Savage Punchline (10-17s)",
+                    "action": "Rapid facial expression breakdown. Frozen with shock. Hands automatically reaching out to obey.",
+                    "dialogue": active_punchline,
+                    "camera": "Slow cinematic zoom on defeated face with vine boom",
+                    "onscreen_text": "Ghar ka kanoon! ⚖️😂"
+                },
+                {
+                    "time": "0:17 - 0:22",
+                    "label": "Loop Resolution: Comment Trigger (17-22s)",
+                    "action": "Whispers directly into camera mic: 'Aapke ghar ka boss kaun hai? Comment me batao!'",
+                    "dialogue": "Sach bolna, mummy ya papa? Ya tum dono hi darte ho? 😂👇",
+                    "camera": "Front selfie eye-level closing frame",
+                    "onscreen_text": "Comment karo jaldi! 👇"
+                }
+            ]
+            duration_str = "22 seconds (Story Skit)"
+        else: # 15s default
+            scenes = [
                 {
                     "time": "0:00 - 0:03",
-                    "label": "Scene 1: Pattern Interrupt Hook",
-                    "action": "Sudden reaction looking shocked or confused at something off-camera.",
-                    "dialogue": f"Maine toh bas socha tha normal {topic} hoga...",
-                    "camera": "Close-up with quick zoom"
+                    "label": "Hook: Sudden Pattern Interrupt (0-3s)",
+                    "action": "Starts speaking mid-sentence looking completely flabbergasted at camera.",
+                    "dialogue": f"Yaar ek baat batao, {topic} me itna nakhra kyun hota hai?!",
+                    "camera": "Close-up with quick snap zoom",
+                    "onscreen_text": "Yeh roz ka scene hai! 🤦‍♂️"
                 },
                 {
-                    "time": "0:03 - 0:12",
-                    "label": "Scene 2: Relatable Escalation",
-                    "action": "Enters second character (spouse/friend/family) with completely unexpected instruction or demand.",
-                    "dialogue": f"Lekin inhone aisa twist diya ki dimaag hi hil gaya!",
-                    "camera": "Mid-shot two-person frame"
+                    "time": "0:03 - 0:09",
+                    "label": "Escalation: The Dialogue Confrontation (3-9s)",
+                    "action": "Cut to spouse/family member rolling eyes and dropping the cold truth with desi attitude.",
+                    "dialogue": "Nakhra hum nahi karte! Nakhra toh tumhare dimaag me chalta hai 24 ghante!",
+                    "camera": "Side-profile snappy cut",
+                    "onscreen_text": "Full counter-attack! 🔥"
                 },
                 {
-                    "time": "0:12 - 0:19",
-                    "label": "Scene 3: Punchline Twist",
-                    "action": "Hilarious expression or clever witty one-liner response that completely flips the situation.",
-                    "dialogue": "Ab batao iska main kya jawab du?! 🤣",
-                    "camera": "Over-the-shoulder reaction shot"
-                },
-                {
-                    "time": "0:19 - 0:22",
-                    "label": "Scene 4: Loop Ending & Comment Spark",
-                    "action": "Asks viewers polarized question: 'Aap hote toh kya karte? Comment karo!' and freeze funny pose.",
-                    "dialogue": "Subscribe for more comedy shorts! 🔔✨",
-                    "camera": "Front-facing high-energy finish"
+                    "time": "0:09 - 0:15",
+                    "label": "Punchline & Loop Spark (9-15s)",
+                    "action": "Blank blink expression, looking at camera like 'did you hear that?'. Cuts sound instantly.",
+                    "dialogue": active_punchline,
+                    "camera": "Direct front-facing frozen comic pose",
+                    "onscreen_text": "Aapke sath bhi aisa hota hai? 😂"
                 }
-            ],
-            "hashtags": [f"#{topic.replace(' ', '').lower()}", "#funny", "#comedy", "#shortsfeed", "#viralshorts", "#youtubeshorts"]
-        }
+            ]
+            duration_str = "15 seconds (Sweet-Spot Retention)"
 
-    return jsonify({"success": True, "script": selected})
+        loop_technique = "Sound abruptly cuts on the final eye-blink so the re-play feels like the confrontation is looping continuously."
+        comment_spark = "Aapke ghar me aisi ladayi me kaun jeetta hai? Pati ya Patni? Comment me batao! 😂👇"
+
+    elif archetype == "trending_sound":
+        titles = [
+            f"Jhinga La La Vibe Check! 🤣🔥 #shorts #{clean_topic_tag}",
+            f"When This Song Plays in Desi House! 😂💃 #shorts",
+            f"Wait For The Beat Drop Reaction! 😳💥 #shorts"
+        ]
+        hook_text = "End tak expression dekho! 🤣"
+        audio = "Viral 'Jhinga Lala Hu Hu' / 'Kaka Dada Mama' / Trending Bollywood Bass Drop"
+        
+        punchline_options = [
+            "Beat drop pe aisi acting ki padosi bhi window se dekhne lage! 🤣💃",
+            "Dance karne gaye the... pairo me moch alag aa gayi! 😭😂",
+            "Yeh step dekhkar mummy boli: padhai me itna dhyan lagata toh collector hota! 💀"
+        ]
+        active_punchline = punchline_options[punchline_idx % len(punchline_options)]
+
+        scenes = [
+            {
+                "time": "0:00 - 0:03",
+                "label": "Beat Setup: The Serious Face (0-3s)",
+                "action": "Standing completely serious with folded arms while the slow intro of trending audio plays.",
+                "dialogue": "Dil me tha serious banna... lekin beat ne majboor kar diya! 🎵",
+                "camera": "Still medium shot",
+                "onscreen_text": "Wait for beat drop... ⏳"
+            },
+            {
+                "time": "0:03 - 0:08",
+                "label": "Beat Drop: Sudden Energetic Dance / Expression (3-8s)",
+                "action": "Instant chaos! Hilarious lip-sync, crazy eye movements, sudden desi hook steps perfectly on beat.",
+                "dialogue": "Jhinga lala hu hu! 🕺💃 (Lip-sync high energy)",
+                "camera": "Fast hand-held shaky cam with speed ramps",
+                "onscreen_text": "Energy 200% 🔥😂"
+            },
+            {
+                "time": "0:08 - 0:12",
+                "label": "The Unexpected Interruption / Climax (8-12s)",
+                "action": "Mummy/Spouse walks in holding broom or tea cup, watching with complete disbelief.",
+                "dialogue": active_punchline,
+                "camera": "Rapid zoom into their stunned reaction",
+                "onscreen_text": "Caught in 4K! 😳💀"
+            }
+        ]
+        duration_str = "12 seconds (Audio-Sync Loop)"
+        loop_technique = "Audio loop matches the beat seamlessly so viewers rewatch 2-3 times to catch all facial expressions."
+        comment_spark = "Kiska dance step zyada khatarnak tha? Vote in comments! 💃👇"
+
+    elif archetype == "kids_reaction":
+        titles = [
+            f"Bache Ne Sach Bol Diya Sabke Samne! 😳🤣 #shorts",
+            f"Naksh Ne Diya Aisa Savage Jawab! 😭👏 #shorts",
+            f"Innocent Question Ka Bada Dhamaka! 😂 #shorts"
+        ]
+        hook_text = "Bache jhoot nahi bolte... 😭"
+        audio = "Cute whimsical whistle + Sudden dramatic meme sting ('Oooooh' meme sound)"
+        
+        punchline_options = [
+            "Bacha bola: 'Mummy toh papa ko roz yehi bolti hain!' 😳💀",
+            "Itna sach bhi nahi bolna tha beta, ghar me aag lag gayi! 😭🤣",
+            "Ab batao isko chocolate du ya phone band karu?! 😂"
+        ]
+        active_punchline = punchline_options[punchline_idx % len(punchline_options)]
+
+        scenes = [
+            {
+                "time": "0:00 - 0:03",
+                "label": "The Innocent Question (0-3s)",
+                "action": "Holding phone camera asking child/kid casually while they are playing or eating.",
+                "dialogue": f"Beta ek baat batao... ghar me sabse zyada {topic} kaun karta hai?",
+                "camera": "Eye-level warm natural angle",
+                "onscreen_text": "Innocent question... 😇"
+            },
+            {
+                "time": "0:03 - 0:08",
+                "label": "The Unfiltered Savage Answer (3-8s)",
+                "action": "Child pauses, looks straight into lens without hesitation, drops the bomb.",
+                "dialogue": active_punchline,
+                "camera": "Slow punch-in zoom on kid's confident innocent face",
+                "onscreen_text": "Savage reply! 💥😂"
+            },
+            {
+                "time": "0:08 - 0:13",
+                "label": "Parent's Frozen Reaction (8-13s)",
+                "action": "Camera flips or pans to parent's jaw dropped, eyes wide, trying to cover child's mouth playfully.",
+                "dialogue": "Are chup karo! Yeh camera on hai! 🤫😭",
+                "camera": "Handheld selfie panic reaction",
+                "onscreen_text": "Pura pol khol diya! 🤦‍♀️"
+            }
+        ]
+        duration_str = "13 seconds (High Shareability Loop)"
+        loop_technique = "Ends on the playful scramble so the audio seamlessly transitions back into the innocent question."
+        comment_spark = "Kya aapke bache bhi sabke samne aisi pol kholte hain? 😂👇"
+
+    else: # expectation_vs_reality
+        titles = [
+            f"Expectation vs Reality: {topic} Edition! 😭😂 #shorts",
+            f"Instagram Reel vs Asli Zindagi! 💀 #shorts",
+            f"Yeh Hack Kabhi Mat Try Karna! 🤣 #shorts"
+        ]
+        hook_text = "Expectation vs Reality 😳"
+        audio = "Smooth aesthetic lofi intro -> Instant record scratch & funny fail brass sound"
+        
+        punchline_options = [
+            "Reels me hero lag rahe the... asaliyat me cartoon ban gaye! 😭😂",
+            "5 minute ka desi jugaad ab 5 din tak thik nahi hoga! 💀",
+            "Mene socha tha tareef hogi... yahan sab milkar has rahe hain! 🤣"
+        ]
+        active_punchline = punchline_options[punchline_idx % len(punchline_options)]
+
+        scenes = [
+            {
+                "time": "0:00 - 0:05",
+                "label": "Part 1: Expectation (Aesthetic & Perfect) (0-5s)",
+                "action": "Posing gracefully in slow-mo with aesthetic smile or trying a viral trending hack confidently.",
+                "dialogue": f"Maine socha {topic} kitna aasan aur aesthetic hoga...",
+                "camera": "Smooth cinematic slow pan with bright lighting",
+                "onscreen_text": "Expectation ✨😍"
+            },
+            {
+                "time": "0:05 - 0:12",
+                "label": "Part 2: Reality (Instant Desi Chaos) (5-12s)",
+                "action": "Sudden record scratch! Everything goes wrong: slipped, spilled, funny face covered in chaos.",
+                "dialogue": active_punchline,
+                "camera": "0.5x wide ultra-raw zoom on the mess",
+                "onscreen_text": "Reality 💀😭"
+            },
+            {
+                "time": "0:12 - 0:15",
+                "label": "The Silent Stare (12-15s)",
+                "action": "Looking deadpan into the lens with defeat while sad comedic music or cricket chirp sound plays.",
+                "dialogue": "Kripya karke koi mujhe bacha lo... 😂",
+                "camera": "Freeze frame on expression",
+                "onscreen_text": "Tag that one friend who always does this! 👇"
+            }
+        ]
+        duration_str = "15 seconds (Relatable Twist Loop)"
+        loop_technique = "Freeze frame cut directly back into the glamorous slow-mo intro for extreme contrast looping."
+        comment_spark = "Aapke sath bhi aisa kata hai kabhi? Sach sach batao! 😂👇"
+
+    script_payload = {
+        "title": titles[0],
+        "titles_pool": titles,
+        "hook": hook_text,
+        "archetype": archetype,
+        "archetype_name": archetypes_info[archetype]["name"],
+        "duration": duration_str,
+        "duration_mode": duration_mode,
+        "audio_suggestion": audio,
+        "onscreen_hook_text": hook_text,
+        "loop_ending_technique": loop_technique,
+        "comment_spark": comment_spark,
+        "scenes": scenes,
+        "punchline_variations": punchline_options,
+        "current_punchline_idx": punchline_idx % len(punchline_options),
+        "hashtags": [
+            f"#{clean_topic_tag.lower()}" if clean_topic_tag else "#desicomedy",
+            "#funny",
+            "#comedy",
+            "#shortsfeed",
+            "#viralshorts",
+            "#youtubeshorts",
+            "#trending"
+        ]
+    }
+
+    return jsonify({"success": True, "script": script_payload, "archetypes": archetypes_info})
+
 
 @app.route("/api/generate-hashtag-post", methods=["POST"])
 def generate_hashtag_post():

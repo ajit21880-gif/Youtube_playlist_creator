@@ -133,3 +133,30 @@ export interface SyncReport {
   retained: number;
   url?: string;
 }
+
+export interface ScriptScene {
+  time: string;
+  label: string;
+  action: string;
+  dialogue: string;
+  camera: string;
+  onscreen_text?: string;
+}
+
+export interface ViralScriptData {
+  title: string;
+  titles_pool?: string[];
+  hook: string;
+  archetype: string;
+  archetype_name: string;
+  duration: string;
+  duration_mode: string;
+  audio_suggestion: string;
+  onscreen_hook_text: string;
+  loop_ending_technique: string;
+  comment_spark: string;
+  scenes: ScriptScene[];
+  punchline_variations: string[];
+  current_punchline_idx: number;
+  hashtags: string[];
+}
