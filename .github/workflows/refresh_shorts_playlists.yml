@@ -1,10 +1,11 @@
 name: Refresh YouTube Shorts Playlists
 
 on:
-  schedule:
-    # Run daily at 06:00 UTC (adjust as needed)
-    - cron: '0 6 * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  # Automated schedule disabled to prevent unattended failures when running locally.
+  # Re-enable if you configure YOUTUBE_TOKEN_JSON in GitHub Secrets.
+  # schedule:
+  #   - cron: '0 6 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI if needed
 
 jobs:
   curate-shorts:
